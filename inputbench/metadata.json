@@ -1,0 +1,6 @@
+{
+  "name": "InputBench",
+  "description": "Computer skills benchmark lab measuring clicks per second, typing WPM and accuracy, reaction latency, and 2-key rhythm timing with Nightcore and Half-Time Lo-Fi remixes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,589 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Registered InputBench player profile with unique username and explicit policy agreement consent.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Public display username chosen by the user.",
+          "minLength": 3,
+          "maxLength": 20,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "usernameLower": {
+          "type": "string",
+          "description": "Lowercase canonical username used for uniqueness locking.",
+          "minLength": 3,
+          "maxLength": 20,
+          "pattern": "^[a-z0-9_\\-]+$"
+        },
+        "agreedToPolicy": {
+          "type": "boolean",
+          "description": "Must be true confirming the user ticked and accepted the InputBench Policy Agreements."
+        },
+        "policyVersion": {
+          "type": "string",
+          "description": "Version identifier of the accepted policy agreements.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "policyAgreedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest policy agreement confirmation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was last updated."
+        },
+        "banned": {
+          "type": "boolean",
+          "description": "True if the account has been permanently locked for hacking/exploits or policy violations."
+        },
+        "banReason": {
+          "type": "string",
+          "description": "Reason for account ban (e.g. hacking/exploits or policy violation).",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "banMessage": {
+          "type": "string",
+          "description": "Message displayed on the ban lock screen (e.g. nice try).",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "bannedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the ban was enforced."
+        },
+        "banVersion": {
+          "type": "string",
+          "description": "Security shield revision that issued the ban (e.g. v2).",
+          "minLength": 1,
+          "maxLength": 16
+        }
+      },
+      "required": [
+        "uid",
+        "username",
+        "usernameLower",
+        "agreedToPolicy",
+        "policyVersion",
+        "policyAgreedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "IpBan": {
+      "title": "IpBan",
+      "description": "Hashed IP ban record locked in Firestore to persist hacking/exploits and policy violation bans.",
+      "type": "object",
+      "properties": {
+        "ipHash": {
+          "type": "string",
+          "description": "SHA-256 HMAC hash of the client IP address.",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID active when the ban was triggered.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Ban reason (e.g. hacking/exploits or Policy violation).",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "message": {
+          "type": "string",
+          "description": "Displayed enforcement message (e.g. nice try).",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "banVersion": {
+          "type": "string",
+          "description": "Security shield revision that issued the IP ban.",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the IP ban was recorded."
+        }
+      },
+      "required": ["ipHash", "uid", "reason", "message", "banVersion", "createdAt"]
+    },
+    "UsernameClaim": {
+      "title": "UsernameClaim",
+      "description": "Public uniqueness lock mapping a lowercase username to its owning Firebase Auth UID without exposing PII.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID claiming this username.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Original-case username claimed.",
+          "minLength": 3,
+          "maxLength": 20,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the username was claimed."
+        }
+      },
+      "required": ["uid", "username", "createdAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "A player's verified global personal-best score entry for a specific InputBench game and mode/difficulty board.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player who owns this score entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public player username displayed on the global leaderboard.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "boardKey": {
+          "type": "string",
+          "description": "Board identifier combining game and difficulty/mode (e.g., cps_5s, wave_hard).",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9_\\-]+$"
+        },
+        "gameId": {
+          "type": "string",
+          "description": "Game module identifier.",
+          "enum": [
+            "cps",
+            "typing",
+            "spelling",
+            "reaction",
+            "rhythm",
+            "wave",
+            "shuffle"
+          ]
+        },
+        "score": {
+          "type": "number",
+          "description": "Numeric primary metric used for global sorting (>= 0)."
+        },
+        "scoreLabel": {
+          "type": "string",
+          "description": "Formatted primary score readout (e.g., 12.45 CPS, 118 WPM, 184 ms).",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "detailText": {
+          "type": "string",
+          "description": "Secondary run breakdown text (accuracy, clicks, obstacles, streak).",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player first posted to this board."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player last improved their score or profile on this board."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "boardKey",
+        "gameId",
+        "score",
+        "scoreLabel",
+        "detailText",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ParentalControlConfig": {
+      "title": "ParentalControlConfig",
+      "description": "Server-enforced Parental Controls configuration keyed by Firebase Auth UID, protecting minors with PIN locks, age-tier rules, safe preset chat enforcement, and custom media upload restrictions.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ageTier": {
+          "type": "string",
+          "description": "Account safety tier governing default and maximum allowed chat/social permissions.",
+          "enum": ["under13", "teen13_17", "adult18plus"]
+        },
+        "chatMode": {
+          "type": "string",
+          "description": "Chat restriction mode enforced in Firestore security rules.",
+          "enum": ["off", "friends_safe_presets", "friends_filtered"]
+        },
+        "allowFriendRequests": {
+          "type": "boolean",
+          "description": "Whether friend requests can be sent to or from this account."
+        },
+        "requireParentApproval": {
+          "type": "boolean",
+          "description": "When true, sending or accepting friend requests requires entering the Parent PIN."
+        },
+        "blockPiiAndLinks": {
+          "type": "boolean",
+          "description": "Blocks URLs, phone numbers, emails, off-platform social handles, and grooming solicitation phrases."
+        },
+        "allowCustomMedia": {
+          "type": "boolean",
+          "description": "Whether local custom image/GIF/audio uploads are permitted on this account."
+        },
+        "parentPinEnabled": {
+          "type": "boolean",
+          "description": "Whether a Parent PIN protects Parental Controls from being changed."
+        },
+        "pinHash": {
+          "type": "string",
+          "description": "Salted SHA-256 hex digest of the Parent PIN when parentPinEnabled is true.",
+          "minLength": 0,
+          "maxLength": 128
+        },
+        "blockedAttemptsCount": {
+          "type": "integer",
+          "description": "Count of unsafe/blocked chat or grooming attempts intercepted for parent visibility."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when parental controls were initialized."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when parental controls were last modified."
+        }
+      },
+      "required": [
+        "uid",
+        "ageTier",
+        "chatMode",
+        "allowFriendRequests",
+        "requireParentApproval",
+        "blockPiiAndLinks",
+        "allowCustomMedia",
+        "parentPinEnabled",
+        "blockedAttemptsCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Canonical bidirectional friend relationship between two InputBench players keyed by sorted UID pair.",
+      "type": "object",
+      "properties": {
+        "pairId": {
+          "type": "string",
+          "description": "Canonical sorted UID pair key: {lowerUid}_{higherUid}.",
+          "minLength": 3,
+          "maxLength": 260,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participants": {
+          "type": "array",
+          "description": "Sorted two-element tuple of Firebase Auth UIDs.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "participantUsernames": {
+          "type": "object",
+          "description": "Map of UID to display username for each participant.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "requestedBy": {
+          "type": "string",
+          "description": "UID of the player who initiated the friend request.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "description": "Current relationship state.",
+          "enum": ["pending", "accepted", "blocked"]
+        },
+        "blockedBy": {
+          "type": "string",
+          "description": "UID of the participant who blocked the relationship, if status is blocked.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "lastMessageText": {
+          "type": "string",
+          "description": "Latest sanitized chat message preview.",
+          "minLength": 0,
+          "maxLength": 200
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest chat message."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the friendship record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the friendship record was last updated."
+        }
+      },
+      "required": [
+        "pairId",
+        "participants",
+        "participantUsernames",
+        "requestedBy",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Immutable 1-on-1 friend chat message scoped under an accepted friendship.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Message document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "pairId": {
+          "type": "string",
+          "description": "Parent friendship pairId.",
+          "minLength": 3,
+          "maxLength": 260,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participants": {
+          "type": "array",
+          "description": "Denormalized sorted pair of UIDs matching the parent friendship for secure queries without extra reads.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "senderUid": {
+          "type": "string",
+          "description": "UID of the message sender.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "senderUsername": {
+          "type": "string",
+          "description": "Username of the message sender.",
+          "minLength": 3,
+          "maxLength": 20
+        },
+        "kind": {
+          "type": "string",
+          "description": "Whether the message is a server-allowlisted safe preset or filtered free text.",
+          "enum": ["preset", "text"]
+        },
+        "text": {
+          "type": "string",
+          "description": "Message body.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the message was sent."
+        }
+      },
+      "required": [
+        "id",
+        "pairId",
+        "participants",
+        "senderUid",
+        "senderUsername",
+        "kind",
+        "text",
+        "createdAt"
+      ]
+    },
+    "SafetyReport": {
+      "title": "SafetyReport",
+      "description": "Immutable safety incident report submitted by a user or parent for grooming, off-platform luring, explicit content, or abuse.",
+      "type": "object",
+      "properties": {
+        "reportId": {
+          "type": "string",
+          "description": "Unique safety report ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterUid": {
+          "type": "string",
+          "description": "UID of the user filing the safety report.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reportedUid": {
+          "type": "string",
+          "description": "UID of the reported account.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "pairId": {
+          "type": "string",
+          "description": "Associated friendship pairId.",
+          "minLength": 3,
+          "maxLength": 260
+        },
+        "category": {
+          "type": "string",
+          "description": "Classification of the safety concern.",
+          "enum": [
+            "grooming_solicitation",
+            "off_platform_luring",
+            "explicit_content",
+            "harassment",
+            "cheating_exploit"
+          ]
+        },
+        "details": {
+          "type": "string",
+          "description": "User-supplied report notes.",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "messageExcerpt": {
+          "type": "string",
+          "description": "Optional excerpt of offending message.",
+          "minLength": 0,
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the report was submitted."
+        }
+      },
+      "required": [
+        "reportId",
+        "reporterUid",
+        "reportedUid",
+        "pairId",
+        "category",
+        "details",
+        "messageExcerpt",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/accounts/{uid}": {
+      "schema": {
+        "$ref": "#/entities/UserAccount"
+      },
+      "description": "User account records storing username, policy agreement consent, and ban enforcement state keyed by Firebase Auth UID."
+    },
+    "/ipBans/{ipHash}": {
+      "schema": {
+        "$ref": "#/entities/IpBan"
+      },
+      "description": "Hashed IP ban registry blocking hacking/exploits and policy violation clients."
+    },
+    "/usernames/{usernameLower}": {
+      "schema": {
+        "$ref": "#/entities/UsernameClaim"
+      },
+      "description": "Username uniqueness registry preventing duplicate usernames across accounts."
+    },
+    "/leaderboards/{boardKey}/entries/{entryId}": {
+      "schema": {
+        "$ref": "#/entities/LeaderboardEntry"
+      },
+      "description": "Global leaderboard personal-best entries partitioned by boardKey and keyed by player uid."
+    },
+    "/parentalControls/{uid}": {
+      "schema": {
+        "$ref": "#/entities/ParentalControlConfig"
+      },
+      "description": "Private Parental Controls settings and salted Parent PIN hash keyed by Firebase Auth UID."
+    },
+    "/friendships/{pairId}": {
+      "schema": {
+        "$ref": "#/entities/Friendship"
+      },
+      "description": "Canonical friend request, accepted friend, and blocked relationship records."
+    },
+    "/friendships/{pairId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ChatMessage"
+      },
+      "description": "Immutable 1-on-1 chat messages scoped strictly to accepted friends."
+    },
+    "/safetyReports/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/SafetyReport"
+      },
+      "description": "Immutable safety and anti-grooming reports filed by users or parents."
+    }
+  }
+}

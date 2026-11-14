@@ -1,0 +1,767 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidPairId(pairId) {
+      return pairId is string && pairId.size() >= 3 && pairId.size() <= 260 && pairId.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUsernameFormat(name) {
+      return name is string && name.size() >= 3 && name.size() <= 20 && name.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidLowerUsername(name) {
+      return name is string && name.size() >= 3 && name.size() <= 20 && name.matches('^[a-z0-9_\\-]+$');
+    }
+
+    function isValidBoardKey(boardKey) {
+      return boardKey in [
+        'cps_1s',
+        'cps_5s',
+        'cps_10s',
+        'cps_30s',
+        'typing_paragraph',
+        'typing_survival_easy',
+        'typing_survival_medium',
+        'typing_survival_hard',
+        'typing_survival_extreme',
+        'spelling_easy',
+        'spelling_medium',
+        'spelling_hard',
+        'spelling_extreme',
+        'reaction_3',
+        'reaction_5',
+        'reaction_10',
+        'rhythm_solar-pulse',
+        'rhythm_clockwork-grid',
+        'rhythm_velvet-horizon',
+        'rhythm_custom',
+        'wave_easy',
+        'wave_medium',
+        'wave_hard',
+        'shuffle_easy',
+        'shuffle_medium',
+        'shuffle_hard'
+      ];
+    }
+
+    function isValidGameId(gameId) {
+      return gameId in ['cps', 'typing', 'spelling', 'reaction', 'rhythm', 'wave', 'shuffle'];
+    }
+
+    function isAccountActive(uid) {
+      return exists(/databases/$(database)/documents/accounts/$(uid))
+        && (
+          !('banned' in get(/databases/$(database)/documents/accounts/$(uid)).data)
+          || get(/databases/$(database)/documents/accounts/$(uid)).data.banned == false
+          || !('banVersion' in get(/databases/$(database)/documents/accounts/$(uid)).data)
+        );
+    }
+
+    function hasParentalDoc(uid) {
+      return exists(/databases/$(database)/documents/parentalControls/$(uid));
+    }
+
+    function getParental(uid) {
+      return get(/databases/$(database)/documents/parentalControls/$(uid)).data;
+    }
+
+    function userAllowsFriendRequests(uid) {
+      return !hasParentalDoc(uid) || getParental(uid).allowFriendRequests == true;
+    }
+
+    function userChatMode(uid) {
+      return hasParentalDoc(uid) ? getParental(uid).chatMode : 'friends_filtered';
+    }
+
+    function isSafePresetMessage(text) {
+      return text in [
+        'Hey! Want to play InputBench?',
+        'Good game!',
+        'Nice score!',
+        'Want to try Click Speed?',
+        'Want to race in Typing?',
+        'Let\'s play Reaction Time!',
+        'Let\'s try Heartbeat Wave!',
+        'Want to play Ball Shuffle?',
+        'Let\'s try AI Spelling!',
+        'That was so close!',
+        'New personal best!',
+        'One more round?',
+        'On my way!',
+        'Hold on, one sec!',
+        'Awesome timing!',
+        'Gotta go, catch you later!',
+        'Thanks for the match!',
+        'Haha, nice try!'
+      ];
+    }
+
+    function isValidUserAccount(data, uid) {
+      return data.keys().hasAll([
+          'uid',
+          'username',
+          'usernameLower',
+          'agreedToPolicy',
+          'policyVersion',
+          'policyAgreedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'username',
+          'usernameLower',
+          'agreedToPolicy',
+          'policyVersion',
+          'policyAgreedAt',
+          'createdAt',
+          'updatedAt',
+          'banned',
+          'banReason',
+          'banMessage',
+          'bannedAt',
+          'banVersion'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && isValidId(data.uid)
+        && data.uid == uid
+        && data.uid == request.auth.uid
+        && isValidUsernameFormat(data.username)
+        && isValidLowerUsername(data.usernameLower)
+        && data.username.lower() == data.usernameLower
+        && data.agreedToPolicy is bool
+        && data.agreedToPolicy == true
+        && data.policyVersion is string
+        && data.policyVersion.size() >= 1
+        && data.policyVersion.size() <= 20
+        && data.policyAgreedAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('banned' in data) || data.banned is bool)
+        && (!('banReason' in data) || (data.banReason is string && data.banReason.size() >= 1 && data.banReason.size() <= 200))
+        && (!('banMessage' in data) || (data.banMessage is string && data.banMessage.size() >= 1 && data.banMessage.size() <= 120))
+        && (!('bannedAt' in data) || data.bannedAt is timestamp)
+        && (!('banVersion' in data) || (data.banVersion is string && data.banVersion.size() >= 1 && data.banVersion.size() <= 16));
+    }
+
+    function isValidIpBan(data, ipHash) {
+      return data.keys().hasAll(['ipHash', 'uid', 'reason', 'message', 'banVersion', 'createdAt'])
+        && data.keys().hasOnly(['ipHash', 'uid', 'reason', 'message', 'banVersion', 'createdAt'])
+        && data.ipHash is string
+        && data.ipHash.size() >= 16
+        && data.ipHash.size() <= 128
+        && data.ipHash == ipHash
+        && isValidId(ipHash)
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.reason is string
+        && data.reason.size() >= 1
+        && data.reason.size() <= 200
+        && data.message is string
+        && data.message.size() >= 1
+        && data.message.size() <= 120
+        && data.banVersion is string
+        && data.banVersion == 'v2'
+        && data.createdAt is timestamp;
+    }
+
+    function isValidUsernameClaim(data, usernameLower) {
+      return data.keys().hasAll(['uid', 'username', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'username', 'createdAt'])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid == request.auth.uid
+        && isValidUsernameFormat(data.username)
+        && data.username.lower() == usernameLower
+        && data.createdAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data, boardKey, entryId) {
+      return data.keys().hasAll([
+          'uid',
+          'displayName',
+          'boardKey',
+          'gameId',
+          'score',
+          'scoreLabel',
+          'detailText',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'boardKey',
+          'gameId',
+          'score',
+          'scoreLabel',
+          'detailText',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.uid == entryId
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 40
+        && data.boardKey is string
+        && data.boardKey.size() >= 2
+        && data.boardKey.size() <= 64
+        && data.boardKey == boardKey
+        && isValidBoardKey(boardKey)
+        && data.gameId is string
+        && data.gameId.size() >= 2
+        && data.gameId.size() <= 20
+        && isValidGameId(data.gameId)
+        && (data.score is int || data.score is float)
+        && data.score >= 0
+        && data.score <= 10000000
+        && data.scoreLabel is string
+        && data.scoreLabel.size() >= 1
+        && data.scoreLabel.size() <= 64
+        && data.detailText is string
+        && data.detailText.size() >= 1
+        && data.detailText.size() <= 120
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParentalControls(data, uid) {
+      return data.keys().hasAll([
+          'uid',
+          'ageTier',
+          'chatMode',
+          'allowFriendRequests',
+          'requireParentApproval',
+          'blockPiiAndLinks',
+          'allowCustomMedia',
+          'parentPinEnabled',
+          'blockedAttemptsCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'ageTier',
+          'chatMode',
+          'allowFriendRequests',
+          'requireParentApproval',
+          'blockPiiAndLinks',
+          'allowCustomMedia',
+          'parentPinEnabled',
+          'pinHash',
+          'blockedAttemptsCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string
+        && isValidId(data.uid)
+        && data.uid == uid
+        && data.uid == request.auth.uid
+        && data.ageTier is string
+        && data.ageTier in ['under13', 'teen13_17', 'adult18plus']
+        && data.chatMode is string
+        && data.chatMode in ['off', 'friends_safe_presets', 'friends_filtered']
+        && data.allowFriendRequests is bool
+        && data.requireParentApproval is bool
+        && data.blockPiiAndLinks is bool
+        && data.allowCustomMedia is bool
+        && data.parentPinEnabled is bool
+        && (
+          (
+            data.parentPinEnabled == false
+            && (!('pinHash' in data) || (data.pinHash is string && data.pinHash.size() == 0))
+          )
+          || (
+            data.parentPinEnabled == true
+            && ('pinHash' in data)
+            && data.pinHash is string
+            && data.pinHash.size() == 64
+            && data.pinHash.matches('^[a-f0-9]+$')
+          )
+        )
+        && data.blockedAttemptsCount is int
+        && data.blockedAttemptsCount >= 0
+        && data.blockedAttemptsCount <= 1000000
+        && (
+          data.ageTier != 'under13'
+          || (data.chatMode in ['off', 'friends_safe_presets'] && data.blockPiiAndLinks == true)
+        )
+        && (
+          data.ageTier != 'teen13_17'
+          || data.blockPiiAndLinks == true
+        )
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParticipantsList(listVal) {
+      return listVal is list
+        && listVal.size() == 2
+        && listVal[0] is string
+        && listVal[1] is string
+        && isValidId(listVal[0])
+        && isValidId(listVal[1])
+        && listVal[0] < listVal[1];
+    }
+
+    function isValidFriendship(data, pairId) {
+      return data.keys().hasAll([
+          'pairId',
+          'participants',
+          'participantUsernames',
+          'requestedBy',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'pairId',
+          'participants',
+          'participantUsernames',
+          'requestedBy',
+          'status',
+          'blockedBy',
+          'lastMessageText',
+          'lastMessageAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.pairId is string
+        && isValidPairId(data.pairId)
+        && data.pairId == pairId
+        && isValidParticipantsList(data.participants)
+        && data.pairId == (data.participants[0] + '_' + data.participants[1])
+        && data.participantUsernames is map
+        && data.participantUsernames.keys().hasAll(data.participants)
+        && data.participantUsernames.keys().hasOnly(data.participants)
+        && data.participantUsernames[data.participants[0]] is string
+        && isValidUsernameFormat(data.participantUsernames[data.participants[0]])
+        && data.participantUsernames[data.participants[1]] is string
+        && isValidUsernameFormat(data.participantUsernames[data.participants[1]])
+        && data.requestedBy is string
+        && data.requestedBy in data.participants
+        && data.status is string
+        && data.status in ['pending', 'accepted', 'blocked']
+        && (!('blockedBy' in data) || (data.blockedBy is string && data.blockedBy in data.participants))
+        && (!('lastMessageText' in data) || (data.lastMessageText is string && data.lastMessageText.size() >= 0 && data.lastMessageText.size() <= 200))
+        && (!('lastMessageAt' in data) || data.lastMessageAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data, pairId, messageId) {
+      return data.keys().hasAll([
+          'id',
+          'pairId',
+          'participants',
+          'senderUid',
+          'senderUsername',
+          'kind',
+          'text',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'pairId',
+          'participants',
+          'senderUid',
+          'senderUsername',
+          'kind',
+          'text',
+          'createdAt'
+        ])
+        && data.id is string
+        && isValidId(data.id)
+        && data.id == messageId
+        && data.pairId is string
+        && isValidPairId(data.pairId)
+        && data.pairId == pairId
+        && isValidParticipantsList(data.participants)
+        && data.pairId == (data.participants[0] + '_' + data.participants[1])
+        && data.senderUid is string
+        && data.senderUid == request.auth.uid
+        && data.senderUid in data.participants
+        && data.senderUsername is string
+        && isValidUsernameFormat(data.senderUsername)
+        && data.kind is string
+        && data.kind in ['preset', 'text']
+        && data.text is string
+        && data.text.size() >= 1
+        && data.text.size() <= 300
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSafetyReport(data, reportId) {
+      return data.keys().hasAll([
+          'reportId',
+          'reporterUid',
+          'reportedUid',
+          'pairId',
+          'category',
+          'details',
+          'messageExcerpt',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'reportId',
+          'reporterUid',
+          'reportedUid',
+          'pairId',
+          'category',
+          'details',
+          'messageExcerpt',
+          'createdAt'
+        ])
+        && data.reportId is string
+        && isValidId(data.reportId)
+        && data.reportId == reportId
+        && data.reporterUid is string
+        && isValidId(data.reporterUid)
+        && data.reporterUid == request.auth.uid
+        && data.reportedUid is string
+        && isValidId(data.reportedUid)
+        && data.reportedUid != data.reporterUid
+        && data.pairId is string
+        && isValidPairId(data.pairId)
+        && data.category is string
+        && data.category in [
+          'grooming_solicitation',
+          'off_platform_luring',
+          'explicit_content',
+          'harassment',
+          'cheating_exploit'
+        ]
+        && data.details is string
+        && data.details.size() >= 1
+        && data.details.size() <= 500
+        && data.messageExcerpt is string
+        && data.messageExcerpt.size() >= 0
+        && data.messageExcerpt.size() <= 300
+        && data.createdAt is timestamp;
+    }
+
+    match /accounts/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidId(uid)
+        && isValidUserAccount(incoming(), uid)
+        && (!('banned' in incoming()) || incoming().banned == false)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().policyAgreedAt == request.time
+        && existsAfter(/databases/$(database)/documents/usernames/$(incoming().usernameLower))
+        && getAfter(/databases/$(database)/documents/usernames/$(incoming().usernameLower)).data.uid == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && isValidId(uid)
+        && isValidUserAccount(incoming(), uid)
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().username == existing().username
+        && incoming().usernameLower == existing().usernameLower
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            (!('banned' in existing()) || existing().banned == false)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'agreedToPolicy',
+              'policyVersion',
+              'policyAgreedAt',
+              'updatedAt'
+            ])
+            && incoming().policyAgreedAt == request.time
+          )
+          ||
+          (
+            (!('banned' in existing()) || existing().banned == false || !('banVersion' in existing()))
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'banned',
+              'banReason',
+              'banMessage',
+              'bannedAt',
+              'banVersion',
+              'updatedAt'
+            ])
+            && incoming().banned == true
+            && incoming().banVersion == 'v2'
+            && incoming().banReason is string
+            && incoming().banMessage is string
+            && incoming().bannedAt == request.time
+          )
+          ||
+          (
+            !('banVersion' in existing())
+            && existing().banned == true
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'banned',
+              'updatedAt'
+            ])
+            && incoming().banned == false
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /ipBans/{ipHash} {
+      allow get: if isSignedIn() && isValidId(ipHash);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidId(ipHash)
+        && isValidIpBan(incoming(), ipHash)
+        && incoming().createdAt == request.time;
+
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && isValidId(ipHash)
+        && existing().uid == request.auth.uid
+        && !('banVersion' in existing());
+    }
+
+    match /usernames/{usernameLower} {
+      // Single-doc exact lookup only (zero PII stored); listing/scraping is disabled
+      allow get: if isValidLowerUsername(usernameLower);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidLowerUsername(usernameLower)
+        && isValidUsernameClaim(incoming(), usernameLower)
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/accounts/$(request.auth.uid));
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /leaderboards/{boardKey}/entries/{entryId} {
+      allow get: if isSignedIn() && isValidBoardKey(boardKey) && isValidId(entryId);
+      allow list: if isSignedIn() && resource.data.score >= 0;
+
+      allow create: if isSignedIn()
+        && isValidId(entryId)
+        && isValidLeaderboardEntry(incoming(), boardKey, entryId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAccountActive(request.auth.uid);
+
+      allow update: if isSignedIn()
+        && isValidId(entryId)
+        && isValidLeaderboardEntry(incoming(), boardKey, entryId)
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().boardKey == existing().boardKey
+        && incoming().gameId == existing().gameId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'score',
+          'scoreLabel',
+          'detailText',
+          'updatedAt'
+        ])
+        && (
+          boardKey.matches('^reaction_.*')
+            ? incoming().score <= existing().score
+            : incoming().score >= existing().score
+        )
+        && isAccountActive(request.auth.uid);
+
+      allow delete: if isSignedIn()
+        && isValidBoardKey(boardKey)
+        && isValidId(entryId)
+        && existing().uid == request.auth.uid
+        && isAccountActive(request.auth.uid);
+    }
+
+    match /parentalControls/{uid} {
+      // Owner-only private storage (salted pinHash is never exposed to other users)
+      allow get: if isSignedIn() && isValidId(uid) && request.auth.uid == uid;
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidId(uid)
+        && isValidParentalControls(incoming(), uid)
+        && incoming().blockedAttemptsCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && isValidId(uid)
+        && isValidParentalControls(incoming(), uid)
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().blockedAttemptsCount >= existing().blockedAttemptsCount;
+
+      allow delete: if false;
+    }
+
+    match /friendships/{pairId} {
+      allow get: if isSignedIn() && isValidPairId(pairId) && request.auth.uid in existing().participants;
+      allow list: if isSignedIn() && request.auth.uid in existing().participants;
+
+      allow create: if isSignedIn()
+        && isValidPairId(pairId)
+        && isValidFriendship(incoming(), pairId)
+        && request.auth.uid in incoming().participants
+        && incoming().requestedBy == request.auth.uid
+        && !('lastMessageText' in incoming())
+        && !('lastMessageAt' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAccountActive(request.auth.uid)
+        && (
+          (
+            incoming().status == 'pending'
+            && !('blockedBy' in incoming())
+            && userAllowsFriendRequests(incoming().participants[0])
+            && userAllowsFriendRequests(incoming().participants[1])
+          )
+          ||
+          (
+            incoming().status == 'blocked'
+            && ('blockedBy' in incoming())
+            && incoming().blockedBy == request.auth.uid
+          )
+        );
+
+      allow update: if isSignedIn()
+        && isValidPairId(pairId)
+        && isValidFriendship(incoming(), pairId)
+        && request.auth.uid in existing().participants
+        && incoming().pairId == existing().pairId
+        && incoming().participants == existing().participants
+        && incoming().participantUsernames == existing().participantUsernames
+        && incoming().requestedBy == existing().requestedBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && isAccountActive(request.auth.uid)
+        && (
+          // Recipient accepts a pending friend request
+          (
+            existing().status == 'pending'
+            && existing().requestedBy != request.auth.uid
+            && incoming().status == 'accepted'
+            && !('blockedBy' in incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && userAllowsFriendRequests(existing().participants[0])
+            && userAllowsFriendRequests(existing().participants[1])
+          )
+          ||
+          // Either participant blocks the relationship
+          (
+            existing().status != 'blocked'
+            && incoming().status == 'blocked'
+            && ('blockedBy' in incoming())
+            && incoming().blockedBy == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'blockedBy', 'updatedAt'])
+          )
+          ||
+          // Update latest chat preview on an accepted friendship
+          (
+            existing().status == 'accepted'
+            && incoming().status == 'accepted'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessageText', 'lastMessageAt', 'updatedAt'])
+            && incoming().lastMessageAt == request.time
+            && incoming().lastMessageText is string
+            && incoming().lastMessageText.size() >= 1
+            && incoming().lastMessageText.size() <= 200
+            && userChatMode(existing().participants[0]) != 'off'
+            && userChatMode(existing().participants[1]) != 'off'
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidPairId(pairId)
+        && request.auth.uid in existing().participants
+        && (existing().status != 'blocked' || existing().blockedBy == request.auth.uid);
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn()
+          && isValidPairId(pairId)
+          && isValidId(messageId)
+          && request.auth.uid in existing().participants;
+
+        // Zero get() lookups in list queries (denormalized participants checked directly)
+        allow list: if isSignedIn()
+          && isValidPairId(pairId)
+          && request.auth.uid in existing().participants;
+
+        allow create: if isSignedIn()
+          && isValidPairId(pairId)
+          && isValidId(messageId)
+          && isValidChatMessage(incoming(), pairId, messageId)
+          && incoming().createdAt == request.time
+          && isAccountActive(request.auth.uid)
+          && exists(/databases/$(database)/documents/friendships/$(pairId))
+          && get(/databases/$(database)/documents/friendships/$(pairId)).data.status == 'accepted'
+          && get(/databases/$(database)/documents/friendships/$(pairId)).data.participants == incoming().participants
+          && userChatMode(incoming().participants[0]) != 'off'
+          && userChatMode(incoming().participants[1]) != 'off'
+          && (
+            (
+              userChatMode(incoming().participants[0]) == 'friends_filtered'
+              && userChatMode(incoming().participants[1]) == 'friends_filtered'
+            )
+            ||
+            (
+              incoming().kind == 'preset'
+              && isSafePresetMessage(incoming().text)
+            )
+          );
+
+        allow update, delete: if false;
+      }
+    }
+
+    match /safetyReports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && existing().reporterUid == request.auth.uid;
+      allow list: if isSignedIn() && existing().reporterUid == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && isValidId(reportId)
+        && isValidSafetyReport(incoming(), reportId)
+        && incoming().createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+  }
+}
