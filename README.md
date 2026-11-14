@@ -1,4 +1,4 @@
-# Test it live out here : [https://inputbench-six.vercel.app/]
+# Test it live out here : https://inputbench-six.vercel.app/
 # Run and deploy your app
 
 This contains everything you need to run your app locally.
